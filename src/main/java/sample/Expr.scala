@@ -6,14 +6,7 @@ import calculation.ExpressionParser
 object Expr {
   import ExpressionParser._
   def main(args: Array[String]): Unit = {
-    println(BinaryOperatorTree(
-      3,
-      SingleOperatorTree(
-        BinaryOperatorTree(1,
-          3,
-          _ - _),
-        _.abs),
-      _ ^ _))
+    println(parseAll(expression, "4 * 2x - |3 - 9|").get)
 //    def add: (ValueType, ValueType) => ValueType = _ + _
 //    def mul: (ValueType, ValueType) => ValueType = _ * _
 //    def div: (ValueType, ValueType) => ValueType = _ / _
@@ -33,7 +26,7 @@ object Expr {
         } else {
           e.get.collectFreeVariable match {
             case s if s.isEmpty => println(e.get.getValueOption().get)
-            case s => {
+            case s =>
               val ms = scala.collection.mutable.Map.empty[String, Expr]
               s.toList.foreach(v => {
                 print(s"$v?")
@@ -41,7 +34,6 @@ object Expr {
                 ms.put(v, parseAll(expression, db).get)
               })
               println(e.get.computeExpressionOption(ms.toMap).get)
-            }
           }
         }
       } else {
@@ -49,9 +41,16 @@ object Expr {
         if (rawRes.successful) {
           val res = rawRes.get
           val vars = res.collectFreeVariable
-          println(s"res$idx = ")
-          if (vars.isEmpty) println(res.getValueOption().get)
-          else println(s"(${vars.mkString(",")}) => $expr")
+          print(s"res$idx: ")
+          if (vars.isEmpty) {
+            val computed = res.getValueOption().get
+            print(computed.getClass.getSimpleName + " = ")
+            println(res.getValueOption().get)
+          }
+          else {
+            print(s"function/${vars.size} = ")
+            println(s"(${vars.mkString(", ")}) => $res")
+          }
           results.put(s"res$idx", res)
           idx += 1
         } else {

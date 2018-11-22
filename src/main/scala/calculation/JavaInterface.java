@@ -22,12 +22,19 @@ public class JavaInterface {
     }
 
     public static String computeExpression(ExpressionTree.Expr expression, Map<String, String> context) {
-        Option<String> result = Helpers.computeExpression(expression, context).map(ValueType::toString);
-        if (result.isDefined()) return result.get();
-        throw new IllegalArgumentException("Invalid expression or context");
+        return computeExpressionValue(expression, context).toString();
     }
 
     public static String computeExpression(ExpressionTree.Expr expression) {
         return computeExpression(expression, new HashMap<>());
+    }
+
+    public static ValueType computeExpressionValue(ExpressionTree.Expr expression, Map<String, String> context) {
+        Option<ValueType> result = Helpers.computeExpression(expression, context);
+        if (result.isDefined()) return result.get();
+        throw new IllegalArgumentException("Invalid expression or context");
+    }
+    public static ValueType computeExpressionValue(ExpressionTree.Expr expression) {
+        return computeExpressionValue(expression, new HashMap<>());
     }
 }

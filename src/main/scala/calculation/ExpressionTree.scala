@@ -27,7 +27,16 @@ object ExpressionTree {
     def computeExpression(context: Map[String, Expr]): Option[ValueType]
   }
 
-  case class BinaryOperatorTree(lch: Expr, rch: Expr, op: (ValueType, ValueType) => ValueType) extends InstantExpr {
+  trait WithOperatorName {
+    var operatorName: String = ""
+    def displayName:String = if (operatorName.length != 0) operatorName else "$lambda"
+    def withName(name: String):this.type = {
+      operatorName = name
+      this
+    }
+  }
+
+  case class BinaryOperatorTree(lch: Expr, rch: Expr, op: (ValueType, ValueType) => ValueType) extends InstantExpr with WithOperatorName {
     override def getValueOption(context: Map[String, ValueType]): Option[ValueType] =
       lch.getValueOption(context).flatMap(x => rch.getValueOption(context).map(op(x, _)))
 
@@ -35,15 +44,24 @@ object ExpressionTree {
       lch.computeExpressionOption(context).flatMap(x => rch.computeExpressionOption(context).map(op(x, _)))
 
     override def collectFreeVariable: Set[String] = lch.collectFreeVariable ++ rch.collectFreeVariable
+
+    override def toString: String = s"$displayName($lch, $rch)"
   }
 
-  case class ValueLeaf(override val value: ValueType) extends InstantExpr
+  case class ValueLeaf(override val value: ValueType) extends InstantExpr {
+    override def toString: String = value.toString
+  }
 
-  case class SingleOperatorTree(node: Expr, op: ValueType => ValueType) extends InstantExpr {
+  case class SingleOperatorTree(node: Expr, op: ValueType => ValueType) extends InstantExpr with WithOperatorName {
     override def getValueOption(context: Map[String, ValueType]): Option[ValueType] =
       node.getValueOption(context).map(op)
 
+    override def computeExpressionOption(context: Map[String, Expr]): Option[ValueType] =
+      node computeExpressionOption context map op
+
     override def collectFreeVariable: Set[String] = node.collectFreeVariable
+
+    override def toString: String = s"$displayName($node)"
   }
 
   case class FreeVariableLeaf(name: String) extends FreeExpr {
@@ -54,6 +72,8 @@ object ExpressionTree {
       context.get(name) flatMap (_.computeExpressionOption(context))
 
     override def collectFreeVariable: Set[String] = Set(name)
+
+    override def toString: String = name
   }
 
   implicit def fromValue(value: ValueType): ValueLeaf = ValueLeaf(value)
