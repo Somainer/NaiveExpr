@@ -35,7 +35,7 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
 
   def factor = simpleMultiply | leafValue | bracket | singleCalls | piLeaf | freeVariable
 
-  def bracket = "(" ~> expression <~ ")"
+  def bracket = "(" ~> statement <~ ")"
 
   def term: Parser[Expr] = binaryOperatorReducer(factor)(Map(
     "*" -> (_ * _),
@@ -49,6 +49,8 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
     "+" -> (_ + _),
     "-" -> (_ - _)
   ))
+
+  def statement: ExpressionParser.Parser[Expr] = functionCall | expression
 
   def infixOperator[A, B](pa: Parser[A], pb: Parser[A])(sep: Parser[B])(f: (A, A) => A): Parser[A] =
     pa ~ rep(sep ~> pb) ^^ {
@@ -69,8 +71,8 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
   }
 
   def binaryCallTree(name: Parser[String])(fn: (ValueType, ValueType) => ValueType): Parser[Expr] =
-    name ~> ("(" ~> expression <~ ",") ~ (expression <~ ")") ^^ {
-      case a ~ b => BinaryOperatorTree(a, b, fn)
+    name ~ ("(" ~> expression <~ ",") ~ (expression <~ ")") ^^ {
+      case n ~ a ~ b => BinaryOperatorTree(a, b, fn) withName n
     }
 
   def singleCallTree(name: Parser[String])(fn: ValueType => ValueType): Parser[SingleOperatorTree] =
@@ -101,5 +103,19 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
   def cos: ExpressionParser.Parser[SingleOperatorTree] = singleCallTree(caseInsensitive("cos"))(_.cos)
 
   def tan: ExpressionParser.Parser[SingleOperatorTree] = singleCallTree(caseInsensitive("tan"))(_.tan)
+
+  def surround[A, B, C](pa: Parser[A], pb: Parser[B])(pc: Parser[C]):Parser[C] = pa ~> pc <~ pb
+
+  def variableAssignment: ExpressionParser.Parser[(String, Expr)] = (identify <~ "=") ~ expression ^^ {
+    case ident ~ exp => ident -> exp
+  }
+
+  def assignmentCall: ExpressionParser.Parser[Map[String, Expr]] = surround("(", ")") {
+    repsep(variableAssignment, ",") ^^ (_.toMap)
+  }
+
+  def functionCall: ExpressionParser.Parser[PartialAppliedExpression] = factor ~ rep1(assignmentCall) ^^ {
+    case f ~ as => PartialAppliedExpression(f, as.reduce(_ ++ _))
+  }
 
 }

@@ -14,12 +14,32 @@ object ExpressionTree {
     }
 
     def collectFreeVariable: Set[String]
+
+    def replaceByContext(context: Map[String, Expr]): Expr = this
+
+    def flatten: Expr = flattenOption getOrElse this
+
+    def flattenOption: Option[ValueLeaf] = getValueOption() map ValueLeaf
   }
 
   trait InstantExpr extends Expr {
     def value: ValueType = getValueOption(Map.empty).get
 
     override def collectFreeVariable: Set[String] = Set.empty
+  }
+
+  case class PartialAppliedExpression(expr: Expr, context: Map[String, Expr]) extends Expr {
+    override def collectFreeVariable: Set[String] = expr.collectFreeVariable -- context.keySet
+
+    override def getValueOption(context: Map[String, ValueType]): Option[ValueType] =
+      this.expr.computeExpressionOption(context.mapValues(ValueLeaf) ++ this.context)
+
+    override def computeExpressionOption(context: Map[String, Expr]): Option[ValueType] =
+      this.expr.computeExpressionOption(context ++ this.context)
+
+    override def replaceByContext(context: Map[String, Expr]): Expr = expr.replaceByContext(context).replaceByContext(this.context)
+
+    override def toString: String = s"(${expr.toString}) where (${context.mkString(",")})"
   }
 
   trait FreeExpr extends Expr {
@@ -45,6 +65,11 @@ object ExpressionTree {
 
     override def collectFreeVariable: Set[String] = lch.collectFreeVariable ++ rch.collectFreeVariable
 
+    override def replaceByContext(context: Map[String, Expr]): Expr =
+      copy(lch = lch replaceByContext context, rch = rch replaceByContext context) withName displayName
+
+    override def flatten: Expr = flattenOption getOrElse (copy(lch = lch.flatten, rch = rch.flatten) withName displayName)
+
     override def toString: String = s"$displayName($lch, $rch)"
   }
 
@@ -61,6 +86,12 @@ object ExpressionTree {
 
     override def collectFreeVariable: Set[String] = node.collectFreeVariable
 
+    override def replaceByContext(context: Map[String, Expr]): Expr =
+      copy(node = node replaceByContext context) withName displayName
+
+    override def flatten: Expr =
+      flattenOption getOrElse(copy(node = node.flatten) withName displayName)
+
     override def toString: String = s"$displayName($node)"
   }
 
@@ -72,6 +103,10 @@ object ExpressionTree {
       context.get(name) flatMap (_.computeExpressionOption(context))
 
     override def collectFreeVariable: Set[String] = Set(name)
+
+    override def replaceByContext(context: Map[String, Expr]): Expr =
+      if(context contains name) context(name)
+      else this
 
     override def toString: String = name
   }

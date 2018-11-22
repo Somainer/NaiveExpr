@@ -23,6 +23,9 @@ public class Main extends Application {
 
 
     public static void main(String[] args) {
-        launch(args);
+        if(args.length == 1 && args[0].toLowerCase().equals("repl")) {
+            Expr.main(args);
+            System.exit(0);
+        } else launch(args);
     }
 }
