@@ -34,12 +34,17 @@ object Expr {
       val jin = new java.util.Scanner(System.in)
       val expr = jin.nextLine()
 //      val command = command
-      val rawRes = parseAll(grammar, expr)
+      val (rawRes, parseTime) = calculateRuntime(parseAll(grammar, expr))
       if (rawRes.successful) {
         rawRes.get match {
           case Some(x) ~ Some(m) =>
             x match {
               case "raw" => processExpression(m replaceByContext results.toMap, true)
+              case "time" =>
+                println(s"Command parsed in $parseTime ms.")
+                val (_, runTime) = calculateRuntime(processExpression(m replaceByContext results.toMap, false))
+                println(s"Evaluated in $runTime ms.")
+                println(s"Total ${parseTime + runTime} ms.")
               case s => println(s"Unsupported command $s")
             }
           case None ~ Some(m) => processExpression(m.replaceByContext(results.toMap), false)
@@ -107,5 +112,12 @@ object Expr {
 
   def main(args: Array[String]): Unit = {
     repl()
+  }
+
+  def calculateRuntime[T](t: => T): (T, Double) = {
+    val start = System.nanoTime
+    val res = t
+    val end = System.nanoTime
+    (res, (end - start) / 1000000.0)
   }
 }
