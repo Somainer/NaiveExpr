@@ -33,9 +33,12 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
     case num ~ expr => BinaryOperatorTree(num, expr, _ * _).withName("*")
   })
 
-  def factor = simpleMultiply | leafValue | bracket | singleCalls | piLeaf | freeVariable
+  def factor =
+    simpleMultiply | leafValue | bracket | singleCalls | piLeaf | freeVariable | convertToInt
 
   def bracket = "(" ~> statement <~ ")"
+
+  def convertToInt = surround("[", "]")(expression) ^^ (SingleOperatorTree(_, _.toRationalInt) withName "int")
 
   def term: Parser[Expr] = binaryOperatorReducer(factor)(Map(
     "*" -> (_ * _),
@@ -72,11 +75,13 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
 
   def binaryCallTree(name: Parser[String])(fn: (ValueType, ValueType) => ValueType): Parser[Expr] =
     name ~ ("(" ~> expression <~ ",") ~ (expression <~ ")") ^^ {
-      case n ~ a ~ b => BinaryOperatorTree(a, b, fn) withName n
+      case n ~ a ~ b => BinaryOperatorTree(a, b, fn) withName n.toLowerCase()
     }
 
   def singleCallTree(name: Parser[String])(fn: ValueType => ValueType): Parser[SingleOperatorTree] =
-    ((name ~> "(" ~> expression <~ ")") | (name ~> factor)) ^^ (SingleOperatorTree(_, fn).withName(name.toString()))
+    (((name <~ "(") ~ expression <~ ")") | (name ~ factor)) ^^ {
+      case n ~ e => SingleOperatorTree(e, fn) withName n.toLowerCase()
+    }
 
   def caseInsensitive(s: String): Parser[String] = s"(?i)${Regex.quote(s)}".r
 

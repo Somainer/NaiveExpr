@@ -19,6 +19,15 @@ object DoubleValue {
 
     override def ^(that: ValueType):DoubleValue = Math.pow(value, that.doubleValue)
 
+    override def equals(obj: Any): Boolean =
+      if(super.equals(obj)) true
+      else obj match {
+        case DoubleValue(`value`) => true
+        case x if x == value => true
+        case x: Rational.Rational => x.doubleValue == value
+        case x => x == this
+      }
+
 
   }
 

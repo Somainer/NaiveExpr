@@ -13,6 +13,7 @@ object Expr {
 //    println(BinaryOperatorTree(BinaryOperatorTree(3, 4, add), BinaryOperatorTree(
 //      FreeVariableLeaf("name"), FreeVariableLeaf("x"), mul
 //    ), div).collectFreeVariable)
+//    println(FreeVariableLeaf("+") == FreeVariableLeaf("+"))
     println("NaiveExpr REPL by Somainer :q to quit")
     var idx = 0
     val results = scala.collection.mutable.Map.empty[String, Expr]
@@ -44,7 +45,8 @@ object Expr {
           results.put("_", res)
           idx += 1
         } else {
-          println("Compile Error!")
+          println("Fatal: Compile Error")
+          println(rawRes)
         }
       }
 
