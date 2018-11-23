@@ -28,6 +28,7 @@ object DoubleValue {
         case x => x == this
       }
 
+    override def typeName: String = "Float"
 
   }
 

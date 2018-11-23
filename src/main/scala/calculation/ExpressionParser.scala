@@ -27,18 +27,26 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
 
   def piLeaf = piValue ^^ ValueLeaf
 
+  def eLeaf: ExpressionParser.Parser[ValueLeaf] = caseInsensitive("e") ^^^ Math.E
+
   def simpleMultiply = (leafValue ~ identify ^^ {
     case num ~ ident => BinaryOperatorTree(num, FreeVariableLeaf(ident), _ * _) withName "*"
   }) | (leafValue ~ bracket ^^ {
     case num ~ expr => BinaryOperatorTree(num, expr, _ * _).withName("*")
   })
 
+  def constants = piLeaf | eLeaf
+
   def factor =
-    simpleMultiply | leafValue | bracket | singleCalls | piLeaf | freeVariable | convertToInt
+    simpleMultiply | leafValue | bracket | calls | constants | freeVariable | convertToInt
 
   def bracket = "(" ~> statement <~ ")"
 
   def convertToInt = surround("[", "]")(expression) ^^ (SingleOperatorTree(_, _.toRationalInt) withName "int")
+
+  def convertToIntByCall = singleCallTree(caseInsensitive("int"))(_.toRationalInt)
+
+  def convertToFloat = singleCallTree(caseInsensitive("float"))(_.toDoubleValue)
 
   def term: Parser[Expr] = binaryOperatorReducer(factor)(Map(
     "*" -> (_ * _),
@@ -73,7 +81,7 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
     }
   }
 
-  def binaryCallTree(name: Parser[String])(fn: (ValueType, ValueType) => ValueType): Parser[Expr] =
+  def binaryCallTree(name: Parser[String])(fn: (ValueType, ValueType) => ValueType): Parser[BinaryOperatorTree] =
     name ~ ("(" ~> expression <~ ",") ~ (expression <~ ")") ^^ {
       case n ~ a ~ b => BinaryOperatorTree(a, b, fn) withName n.toLowerCase()
     }
@@ -85,7 +93,12 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
 
   def caseInsensitive(s: String): Parser[String] = s"(?i)${Regex.quote(s)}".r
 
-  def singleCalls = sqrt | abs | sin | cos | tan | pow
+  def singleCalls =
+    sqrt | abs | sin | cos | tan | ln | convertToIntByCall | convertToFloat
+
+  def binaryCalls = pow | log
+
+  def calls = binaryCalls | singleCalls
 
 //  def add: ExpressionParser.Parser[Expr] = binaryOperatorTree(term)("+")(_ + _)
 //
@@ -95,7 +108,9 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
 //
 //  def div: ExpressionParser.Parser[Expr] = binaryOperatorTree(factor)("/")(_ / _)
 //
-  def pow: ExpressionParser.Parser[Expr] = binaryCallTree(caseInsensitive("pow"))(_ ^ _)
+  def pow: ExpressionParser.Parser[Expr] = binaryCallTree(caseInsensitive("pow"))(_ ^ _) ^^ (_ withName "^")
+
+  def log: ExpressionParser.Parser[Expr] = binaryCallTree(caseInsensitive("log"))(_ log _)
 
   def sqrt: ExpressionParser.Parser[SingleOperatorTree] = singleCallTree(caseInsensitive("sqrt"))(_.sqrt)
 
@@ -108,6 +123,8 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
   def cos: ExpressionParser.Parser[SingleOperatorTree] = singleCallTree(caseInsensitive("cos"))(_.cos)
 
   def tan: ExpressionParser.Parser[SingleOperatorTree] = singleCallTree(caseInsensitive("tan"))(_.tan)
+
+  def ln: ExpressionParser.Parser[SingleOperatorTree] = singleCallTree(caseInsensitive("ln"))(_.ln)
 
   def surround[A, B, C](pa: Parser[A], pb: Parser[B])(pc: Parser[C]):Parser[C] = pa ~> pc <~ pb
 

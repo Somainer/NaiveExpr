@@ -73,6 +73,8 @@ object Rational {
     override def toString: String = if (b == 1) a.toString else f"$a/$b"
 
     override def value: Double = a.toDouble / b
+
+    override def typeName: String = if(b == 1) "Number" else "Rational"
   }
   object RationalExpr {
     def apply(a: Int, b: Int = 1): Rational = if (b == 0) Infinity else {
@@ -90,7 +92,9 @@ object Rational {
   object Infinity extends Rational {
     override def unit(a: Int, b: Int): Rational = Infinity
     override def flatMap(f: (Int, Int) => Rational): Rational = Infinity
-    override def toString: String = "NaN"
+    override def toString: String = "Infinity"
+
+    override def typeName: String = "Infinity"
 
     override def value: Double = Double.NaN
   }

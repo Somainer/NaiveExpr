@@ -1,5 +1,6 @@
 package calculation
 
+import calculation.DoubleValue.DoubleValue
 import calculation.Rational.RationalExpr
 
 trait ValueType {
@@ -16,11 +17,16 @@ trait ValueType {
   def sin: ValueType = DoubleValue(Math.sin(doubleValue))
   def cos: ValueType = DoubleValue(Math.cos(doubleValue))
   def tan: ValueType = DoubleValue(Math.tan(doubleValue))
+  def ln: ValueType = DoubleValue(Math.log(doubleValue))
+  def log(that: ValueType) = DoubleValue(ln.doubleValue / Math.log(that.doubleValue))
   def reciprocal: ValueType
   def toRationalInt: Rational.Rational = this match {
     case DoubleValue(v) => RationalExpr(v.toInt)
     case r: RationalExpr => r
   }
+  def toDoubleValue: DoubleValue = DoubleValue(doubleValue)
+
+  def typeName: String
 
   override def equals(obj: scala.Any): Boolean =
     if(super.equals(obj)) true

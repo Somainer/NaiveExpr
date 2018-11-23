@@ -52,6 +52,8 @@ object ExpressionTree {
   trait WithOperatorName {
     var operatorName: String = ""
     def displayName:String = if (operatorName.length != 0) operatorName else "$lambda"
+    def hasSameNameAs(that: String):Boolean = operatorName.length != 0 && operatorName == that
+    def hasSameNameAs(that: WithOperatorName): Boolean = hasSameNameAs(that.operatorName)
     def withName(name: String):this.type = {
       operatorName = name
       this
@@ -70,6 +72,24 @@ object ExpressionTree {
     override def replaceByContext(context: Map[String, Expr]): Expr =
       copy(lch = lch replaceByContext context, rch = rch replaceByContext context) withName displayName
 
+    override def flatten: Expr = flattenOption getOrElse {
+      val result = copy(lch = lch.flatten, rch = rch.flatten) withName displayName
+      BinaryOperatorTree.flattenSpecials.get(displayName).map(_(result)).getOrElse(result)
+    }
+
+    override def toString: String = s"$displayName($lch, $rch)"
+
+    override def equals(obj: scala.Any): Boolean = {
+      if (super.equals(obj)) true
+      else obj match {
+        case BinaryOperatorTree(`lch`, `rch`, _) | BinaryOperatorTree(`rch`, `lch`, _) if displayName == "*" || displayName == "+"
+          => obj.asInstanceOf[BinaryOperatorTree] hasSameNameAs this
+        case _ => false
+      }
+    }
+  }
+
+  object BinaryOperatorTree {
     def flattenSpecials: Map[String, BinaryOperatorTree => Expr] = Map(
       "+" -> (t => {
         if (t.lch == t.rch) BinaryOperatorTree(2, t.lch, _ * _) withName "*"
@@ -89,24 +109,12 @@ object ExpressionTree {
           .orElse(t.rch.getValueOption().filter(_ == 0))
           .map(_ => ValueLeaf(0))
           .getOrElse(t)
+      }),
+      "/" -> (t => {
+        t.rch.getValueOption().filter(_ == 1).map(_ => t.lch)
+          .getOrElse(t)
       })
     )
-
-    override def flatten: Expr = flattenOption getOrElse {
-      val result = copy(lch = lch.flatten, rch = rch.flatten) withName displayName
-      flattenSpecials.get(displayName).map(_(result)).getOrElse(result)
-    }
-
-    override def toString: String = s"$displayName($lch, $rch)"
-
-    override def equals(obj: scala.Any): Boolean = {
-      if (super.equals(obj)) true
-      else obj match {
-        case BinaryOperatorTree(`lch`, `rch`, _) | BinaryOperatorTree(`rch`, `lch`, _) if displayName == "*" || displayName == "+"
-          => obj.asInstanceOf[BinaryOperatorTree].operatorName == operatorName
-        case _ => false
-      }
-    }
   }
 
   case class ValueLeaf(override val value: ValueType) extends InstantExpr {
@@ -132,10 +140,11 @@ object ExpressionTree {
 
     override def equals(obj: scala.Any): Boolean =
       if (super.equals(obj)) true
-      else this match {
-        case t@SingleOperatorTree(`node`, _) => t.operatorName == operatorName
+      else obj match {
+        case t@SingleOperatorTree(`node`, _) => t hasSameNameAs this
         case _ => false
       }
+
   }
 
   case class FreeVariableLeaf(name: String) extends FreeExpr {
