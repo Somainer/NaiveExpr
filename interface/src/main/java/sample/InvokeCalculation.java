@@ -1,7 +1,7 @@
 package sample;
 import calculation.JavaInterface;
-import calculation.ExpressionTree.Expr;
-import calculation.ValueType;
+import protocols.ExpressionTree.Expr;
+import protocols.ValueType;
 
 public class InvokeCalculation {
     public static void main(String[] args) {

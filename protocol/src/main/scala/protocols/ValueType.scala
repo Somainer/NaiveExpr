@@ -1,9 +1,9 @@
-package calculation
+package protocols
 
-import calculation.DoubleValue.DoubleValue
-import calculation.Rational.RationalExpr
+import protocols.DoubleValue.DoubleValue
+import protocols.Rational.RationalExpr
 
-trait ValueType {
+trait ValueType extends Ordered[ValueType]{
   def + (that: ValueType): ValueType
   def - (that: ValueType): ValueType
   def * (that: ValueType): ValueType
@@ -24,6 +24,11 @@ trait ValueType {
     case DoubleValue(v) => RationalExpr(v.toInt)
     case r: RationalExpr => r
   }
+
+  def toBoolean: Boolean
+
+  override def compare(that: ValueType): Int = this.doubleValue compareTo that.doubleValue
+
   def toDoubleValue: DoubleValue = DoubleValue(doubleValue)
 
   def typeName: String

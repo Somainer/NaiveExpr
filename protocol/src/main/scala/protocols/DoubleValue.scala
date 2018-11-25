@@ -1,4 +1,4 @@
-package calculation
+package protocols
 
 object DoubleValue {
   implicit class DoubleValue(value: Double) extends ValueType {
@@ -6,6 +6,8 @@ object DoubleValue {
     override def -(that: ValueType): ValueType = value - that.doubleValue
     override def *(that: ValueType): ValueType = value * that.doubleValue
     override def /(that: ValueType): ValueType = value / that.doubleValue
+
+    override def toBoolean: Boolean = value != 0
 
     override def unary_- : ValueType = - value
 

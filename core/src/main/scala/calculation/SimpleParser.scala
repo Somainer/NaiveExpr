@@ -1,7 +1,8 @@
 package calculation
 
-import calculation.DoubleValue.DoubleValue
-import calculation.ExpressionTree._
+import protocols.DoubleValue.DoubleValue
+import protocols.ExpressionTree._
+import protocols.ValueType
 
 import scala.util.parsing.combinator.{ImplicitConversions, RegexParsers}
 

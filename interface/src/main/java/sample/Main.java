@@ -5,7 +5,7 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
-import calculation.Rational;
+import protocols.Rational;
 
 public class Main extends Application {
 

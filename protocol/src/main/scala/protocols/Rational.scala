@@ -1,4 +1,4 @@
-package calculation
+package protocols
 
 import scala.annotation.tailrec
 
@@ -67,6 +67,7 @@ object Rational {
 //    override def /(that: ValueType): ValueType = this / that
   }
   case class RationalExpr(a: Int, b: Int = 1) extends Rational {
+    override def toBoolean: Boolean = a != 0
     override def unit(a: Int, b: Int): Rational = RationalExpr.apply(a, b)
     override def flatMap(f: (Int, Int) => Rational): Rational = f(a, b)
 
@@ -90,6 +91,7 @@ object Rational {
     def lcm(a: Int, b: Int) = a / gcd(a, b) * b
   }
   object Infinity extends Rational {
+    override def toBoolean: Boolean = false
     override def unit(a: Int, b: Int): Rational = Infinity
     override def flatMap(f: (Int, Int) => Rational): Rational = Infinity
     override def toString: String = "Infinity"

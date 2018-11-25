@@ -1,12 +1,27 @@
 package sample
 import calculation._
-import calculation.ExpressionTree._
+import protocols.ExpressionTree._
+import protocols.Rational.RationalExpr
+import protocols.ValueType
 //import moe.roselia.NaiveJSON.JSONParser._
 import calculation.ExpressionParser
 object Expr {
   import ExpressionParser._
   val results = scala.collection.mutable.Map.empty[String, Expr]
   var idx = 0
+  case class ExternalContext(name: String, expr: Expr) extends Expr {
+    override def collectFreeVariable: Set[String] = Set.empty
+
+    override def replaceByContext(context: Map[String, Expr]): ExternalContext =
+      ExternalContext(name, expr.replaceByContext(context))
+
+    override def getValueOption(context: Map[String, ValueType]): Option[ValueType] = None
+
+    override def flatten: ExternalContext = ExternalContext(name, expr.flatten)
+  }
+  case class DeleteResult(name: String) extends Expr {
+    override def collectFreeVariable: Set[String] = Set.empty
+  }
   def repl(): Unit = {
 //    println(parseAll(statement, "(4 * 2x - |3 - 9|)(x=1)").map(_.replaceByContext(Map.empty)))
 //    def add: (ValueType, ValueType) => ValueType = _ + _
@@ -24,11 +39,15 @@ object Expr {
         |/    |    \/ __ \|  |\   /\  ___/ |        \>    < |  |_> >  | \/
         |\____|__  (____  /__| \_/  \___  >_______  /__/\_ \|   __/|__|
         |        \/     \/              \/        \/      \/|__|
-        |NaiveExpr REPL by Somainer (moe.roselia.NaiveExpr)
+        |Welcome to NaiveExpr REPL by Somainer (moe.roselia.NaiveExpr).
         |Type in expressions for evaluation. Or try :help.
       """.stripMargin)
     var shouldQuit = false
-    val grammar = opt(":" ~> identify) ~ opt(statement)
+    val defineStatement = "def" ~> ((identify <~ "=") ~ controlFlow) ^^ {
+      case id ~ ex => ExternalContext(id, ex)
+    }
+    val undefStatement = "undef" ~> identify ^^ DeleteResult
+    val grammar = opt(":" ~> identify) ~ opt(defineStatement | undefStatement | controlFlow)
     while(!shouldQuit) {
       print("NaiveExpr>")
       val jin = new java.util.Scanner(System.in)
@@ -39,15 +58,16 @@ object Expr {
         rawRes.get match {
           case Some(x) ~ Some(m) =>
             x match {
-              case "raw" => processExpression(m replaceByContext results.toMap, true)
+              case "raw" => processExpression(m replaceByContext results.toMap, false)
               case "time" =>
                 println(s"Command parsed in $parseTime ms.")
-                val (_, runTime) = calculateRuntime(processExpression(m replaceByContext results.toMap, false))
+                val (_, runTime) = calculateRuntime(processExpression(m replaceByContext results.toMap, true))
                 println(s"Evaluated in $runTime ms.")
                 println(s"Total ${parseTime + runTime} ms.")
+              case "newenv" => processExpression(m, true)
               case s => println(s"Unsupported command $s")
             }
-          case None ~ Some(m) => processExpression(m.replaceByContext(results.toMap), false)
+          case None ~ Some(m) => processExpression(m.replaceByContext(results.toMap), true)
           case Some(c) ~ None => c match {
             case "q" | "quit" =>
               println("GoodBye")
@@ -63,6 +83,18 @@ object Expr {
                 |<statement> => Compile statement and flatten
                 |:help => This message
                 |:clear => Clean up all results
+                |:time <statement> => Also log calculation time.
+                |:newenv <expression> => Supress all defined variables in <expression>
+                |
+                |def <identity> = <expression> => Define new function/variable <identity>
+                |undef <identity> => Remove defined function/variable
+                |
+                |if (<predicate>) <consequent> else <alternative>
+                |
+                |<equation> := <expression> ?<identity>= <expression>
+                |To solve an equation, give a initial guess.
+                |(3x - 2 ?x= 4) => find x where (-(*(3, x), 2) = 4)
+                |(3x - 2 ?x= 4)(x = 1) => Solve this equation with initial guess 1 using newton laws.
                 |
                 |Examples:
                 |x
@@ -91,7 +123,31 @@ object Expr {
   }
 
   def processExpression(result: Expr, flatten: Boolean): Unit = {
-    val res = if(flatten) result else result.flatten
+    result match {
+      case x: ExternalContext => processExpressionImpl(x, flatten)
+      case x: DeleteResult => processExpressionImpl(x, flatten)
+      case _ => processExpressionImpl(result, flatten)
+    }
+  }
+
+  def processExpressionImpl(result: ExternalContext, flatten: Boolean): Unit = {
+    val res = if(flatten) result.flatten else result
+    results.put(res.name, res.expr)
+    println(s"Defined ${res.name} = ${res.expr}")
+
+  }
+
+  def processExpressionImpl(result: DeleteResult, flatten: Boolean): Unit = {
+    if (results.contains(result.name)){
+      results.remove(result.name)
+      println(s"Removed defined value: ${result.name}.")
+    } else {
+      println(s"${result.name} is not defined.")
+    }
+  }
+
+  def processExpressionImpl(result: Expr, flatten: Boolean): Unit = {
+    val res = if(flatten) result.flatten else result
     val vars = res.collectFreeVariable
     //          println(rawRes.get.replaceByContext(results.toMap))
     //          println(res)
@@ -111,7 +167,10 @@ object Expr {
   }
 
   def main(args: Array[String]): Unit = {
-    repl()
+//    println(parseAll(derivative, "d(x)/dx"))
+    if(true || args.length == 1 && args(0) == "repl")
+      repl()
+    else Main.main(args)
   }
 
   def calculateRuntime[T](t: => T): (T, Double) = {

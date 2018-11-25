@@ -1,5 +1,7 @@
 package calculation;
 
+import protocols.ExpressionTree;
+import protocols.ValueType;
 import scala.Option;
 import scala.util.parsing.combinator.Parsers;
 

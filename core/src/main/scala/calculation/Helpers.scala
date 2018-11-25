@@ -1,4 +1,6 @@
 package calculation
+import protocols.{ExpressionTree, ValueType}
+
 import scala.collection.JavaConverters._
 
 object Helpers {

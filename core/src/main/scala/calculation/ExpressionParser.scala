@@ -1,15 +1,24 @@
 package calculation
 
-import calculation.ExpressionTree._
-import calculation.Rational.RationalExpr
+import com.sun.org.apache.xerces.internal.impl.xpath.regex.CaseInsensitiveMap
+import protocols.ExpressionTree._
+import protocols.Rational.RationalExpr
 
 import scala.util.matching.Regex
 import scala.util.parsing.combinator.{ImplicitConversions, RegexParsers}
+import macros.NaiveMarco
+import protocols.{BooleanValue, DoubleValue, Rational, ValueType}
 
 object ExpressionParser extends RegexParsers with ImplicitConversions {
   def digit: Parser[String] = "(0|[1-9][0-9]*|-[1-9][0-9]*)".r
 
   def double: Parser[Double] = """([0-9]*\.)?[0-9]+([eE][-+]?[0-9]+)?""".r ^^ (_.toDouble)
+
+  def keyLiterals = Set("def", "undef", "if", "else", "true", "false", "d", "where", "and")
+
+  def bool = ("true" ^^^ true | "false" ^^^ false) ^^ (BooleanValue(_))
+
+  def boolLeaf = bool ^^ ValueLeaf
 
   def pi = (caseInsensitive("Pi") | "π") ^^^ Math.PI
 
@@ -19,7 +28,7 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
 
   def rationalValue: ExpressionParser.Parser[Rational.Rational] = digit map (_.toInt) map (RationalExpr(_))
 
-  def identify = "[A-Za-z_][A-Za-z0-9_]*".r
+  def identify = "[A-Za-z_][A-Za-z0-9_]*".r filter (!keyLiterals.contains(_))
 
   def freeVariable: ExpressionParser.Parser[FreeVariableLeaf] = identify ^^ FreeVariableLeaf
 
@@ -29,18 +38,18 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
 
   def eLeaf: ExpressionParser.Parser[ValueLeaf] = caseInsensitive("e") ^^^ Math.E
 
-  def simpleMultiply = (leafValue ~ identify ^^ {
-    case num ~ ident => BinaryOperatorTree(num, FreeVariableLeaf(ident), _ * _) withName "*"
-  }) | (leafValue ~ bracket ^^ {
-    case num ~ expr => BinaryOperatorTree(num, expr, _ * _).withName("*")
-  })
+  def simpleMultiply = (leafValue | bracket) ~ rep1((identify ^^ FreeVariableLeaf) | bracket)  ^^ {
+    case num ~ expr => (num /: expr)(BinaryOperatorTree(_, _, _ * _) withName "*")
+  }
 
   def constants = piLeaf | eLeaf
 
-  def factor =
-    simpleMultiply | leafValue | bracket | calls | constants | freeVariable | convertToInt
+  def strictFactor =
+    simpleMultiply | leafValue | bracket | calls | boolLeaf | (freeVariable ||| constants) | convertToInt
 
-  def bracket = "(" ~> statement <~ ")"
+  def factor = strictFactor// | functionCall
+
+  def bracket = "(" ~> controlFlow <~ ")"
 
   def convertToInt = surround("[", "]")(expression) ^^ (SingleOperatorTree(_, _.toRationalInt) withName "int")
 
@@ -48,7 +57,7 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
 
   def convertToFloat = singleCallTree(caseInsensitive("float"))(_.toDoubleValue)
 
-  def term: Parser[Expr] = binaryOperatorReducer(factor)(Map(
+  def term: Parser[Expr] = derivative | functionCall | binaryOperatorReducer(factor)(Map(
     "*" -> (_ * _),
     "/" -> (_ / _),
     "^" -> (_ ^ _)
@@ -61,7 +70,13 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
     "-" -> (_ - _)
   ))
 
-  def statement: ExpressionParser.Parser[Expr] = functionCall | expression
+  def statement: ExpressionParser.Parser[Expr] = compares | expression
+
+  def controlFlow: ExpressionParser.Parser[Expr] = functionCallWhere | equationSolve | ifCondition | statement
+
+  def ifCondition: ExpressionParser.Parser[IfConditionTree] = "if" ~> bracket ~ controlFlow ~ ("else" ~> controlFlow) ^^ {
+    case predicate ~ consequent ~ alternative => IfConditionTree(predicate, consequent, alternative)
+  }
 
   def infixOperator[A, B](pa: Parser[A], pb: Parser[A])(sep: Parser[B])(f: (A, A) => A): Parser[A] =
     pa ~ rep(sep ~> pb) ^^ {
@@ -70,6 +85,14 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
 
   def binaryOperatorTree(expression: Parser[Expr])(ps: Parser[String])(fn: (ValueType, ValueType) => ValueType): Parser[Expr] =
     infixOperator(expression, expression)(ps)(BinaryOperatorTree(_, _, fn))
+
+  def strictBinaryOperatorTree[T](name: String, isCaseInsensitive:Boolean = false)(fn: (ValueType, ValueType) => T)
+                           (implicit cnv: T => ValueType): Parser[Expr] = {
+    val p: Parser[String] = if (isCaseInsensitive) caseInsensitive(name) else name
+    (expression <~ p) ~ expression ^^ {
+      case x ~ y => BinaryOperatorTree(x, y, (a, b) => cnv(fn(a, b))) withName name
+    }
+  }
 
 
   def binaryOperatorReducer(expression: Parser[Expr])(fns: Map[String, (ValueType, ValueType) => ValueType]): Parser[Expr] = {
@@ -85,6 +108,14 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
     name ~ ("(" ~> expression <~ ",") ~ (expression <~ ")") ^^ {
       case n ~ a ~ b => BinaryOperatorTree(a, b, fn) withName n.toLowerCase()
     }
+
+  def binaryCallTree[T](name: String, isCaseInsensitive:Boolean = false)(fn: (ValueType, ValueType) => T)
+                       (implicit cnv: T => ValueType): Parser[BinaryOperatorTree] = {
+    val p: Parser[String] = if (isCaseInsensitive) caseInsensitive(name) else name
+    p ~> ("(" ~> expression <~ ",") ~ (expression <~ ")") ^^ {
+      case a ~ b => BinaryOperatorTree(a, b, (x, y) => cnv(fn(x, y))) withName name
+    }
+  }
 
   def singleCallTree(name: Parser[String])(fn: ValueType => ValueType): Parser[SingleOperatorTree] =
     (((name <~ "(") ~ expression <~ ")") | (name ~ factor)) ^^ {
@@ -112,6 +143,18 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
 
   def log: ExpressionParser.Parser[Expr] = binaryCallTree(caseInsensitive("log"))(_ log _)
 
+  def compares = eq | lt | leqt | gt | geqt
+
+  def lt: ExpressionParser.Parser[Expr] = strictBinaryOperatorTree("<")(_ < _)
+
+  def eq: ExpressionParser.Parser[Expr] = strictBinaryOperatorTree("==")(_ == _)
+
+  def leqt = strictBinaryOperatorTree("<=")(_ <= _)
+
+  def gt = strictBinaryOperatorTree(">")(_ > _)
+
+  def geqt = strictBinaryOperatorTree(">=")(_ >= _)
+
   def sqrt: ExpressionParser.Parser[SingleOperatorTree] = singleCallTree(caseInsensitive("sqrt"))(_.sqrt)
 
   def abs: ExpressionParser.Parser[SingleOperatorTree] = singleCallTree(caseInsensitive("abs"))(_.abs) | (
@@ -136,8 +179,26 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
     repsep(variableAssignment, ",") ^^ (_.toMap)
   }
 
-  def functionCall: ExpressionParser.Parser[PartialAppliedExpression] = factor ~ rep1(assignmentCall) ^^ {
+  def derivative: ExpressionParser.Parser[Expr] = "d" ~> strictFactor ~ ("/" ~> "d" ~> identify) ^^ {
+    case expr ~ x => expr.derivative(x)
+  }
+
+  def equationSolve: ExpressionParser.Parser[EquationSolveTree] = (expression ~ ("?" ~> identify <~ "=") ~ expression ^^ {
+    case lhs ~ variable ~ rhs => EquationSolveTree(lhs, rhs, variable)
+  }) | ((expression <~ "?=") ~ expression).filter {
+    case l ~ r => (l.collectFreeVariable ++ r.collectFreeVariable).size == 1
+  } ^^ {
+    case l ~ r => EquationSolveTree(l, r, (l.collectFreeVariable ++ r.collectFreeVariable).head)
+  }
+
+  def optionalBracket[T](e: Parser[T]): Parser[T] = surround("(", ")")(e) | e
+
+  def functionCall: ExpressionParser.Parser[PartialAppliedExpression] = strictFactor ~ rep1(assignmentCall) ^^ {
     case f ~ as => PartialAppliedExpression(f, as.reduce(_ ++ _))
+  }
+  def functionCallWhere: ExpressionParser.Parser[PartialAppliedExpression] =
+    (equationSolve | expression) ~ "where" ~ optionalBracket(repsep(variableAssignment, "," | "and") ^^ (_.toMap)) ^^ {
+    case e ~ _ ~ ass => PartialAppliedExpression(e, ass)
   }
 
 }
