@@ -5,7 +5,7 @@ import protocols.Rational.{Infinity, Rational, RationalExpr}
 import scala.annotation.tailrec
 import scala.language.implicitConversions
 
-object  ExpressionTree {
+object ExpressionTree {
   trait Expr {
     def +(that: Expr): BinaryOperatorTree = BinaryOperatorTree(this, that, _ + _) withName "+"
     def -(that: Expr): BinaryOperatorTree = BinaryOperatorTree(this, that, _ - _) withName "-"
@@ -30,46 +30,10 @@ object  ExpressionTree {
 
     def flattenOption: Option[Expr] = getValueOption() map ValueLeaf
 
-    def derivative(onVariable: String): Expr = {
-      if (collectFreeVariable.contains(onVariable)) {
-        val self = this
-        new AbstractExpr {
-          override val innerExpr: Expr = self
+    def derivative(onVariable: String): Expr = derivativeApproximate(onVariable)
 
-          val dx = 0.0000001
-
-          override def collectFreeVariable: Set[String] = self.collectFreeVariable
-
-          override def computeExpressionOption(context: Map[String, Expr]): Option[ValueType] =
-            if (context contains onVariable) {
-              for {
-                fx <- self.computeExpressionOption(context.updated(onVariable, context(onVariable) + dx))
-                fxMds <- self.computeExpressionOption(context.updated(onVariable, context(onVariable) - dx))
-              } yield (fx - fxMds) / 2 / dx
-            } else {
-              self.computeExpressionOption(context)
-            }
-
-          override def getValueOption(context: Map[String, ValueType]): Option[ValueType] =
-            computeExpressionOption(context.mapValues(ValueLeaf))
-
-          override def replaceByContext(context: Map[String, Expr]): Expr = {
-            val preReplace = self.replaceByContext(context.filterKeys(_ != onVariable)).derivative(onVariable)
-            if (context contains onVariable) {
-              val x = context(onVariable)
-              val fx = self.replaceByContext(context.updated(onVariable, x + dx))
-              val fxMds = self.replaceByContext(context.updated(onVariable, x - dx))
-              (fx - fxMds) / dx / 2
-            } else preReplace
-          }
-
-
-          override def flatten: Expr = this
-
-          override def toString: String = s"(d($self)/d$onVariable)"
-        }
-      } else 0
-
+    def derivativeApproximate(onVariable: String): Expr = {
+      DerivativeExpr(this, onVariable)
     }
   }
 
@@ -81,6 +45,44 @@ object  ExpressionTree {
 
   abstract class AbstractExpr extends Expr {
     def innerExpr: Expr
+  }
+
+  case class DerivativeExpr(forExpr: Expr, onVariable: String) extends Expr {
+
+    private[this] val self = forExpr
+
+    val dx = 0.0000001
+
+    override def collectFreeVariable: Set[String] = self.collectFreeVariable
+
+    override def computeExpressionOption(context: Map[String, Expr]): Option[ValueType] =
+      if (context contains onVariable) {
+        for {
+          fx <- self.computeExpressionOption(context.updated(onVariable, context(onVariable) + dx))
+          fxMds <- self.computeExpressionOption(context.updated(onVariable, context(onVariable) - dx))
+        } yield (fx - fxMds) / 2 / dx
+      } else {
+        self.computeExpressionOption(context)
+      }
+
+    override def getValueOption(context: Map[String, ValueType]): Option[ValueType] =
+      computeExpressionOption(context.mapValues(ValueLeaf))
+
+    override def replaceByContext(context: Map[String, Expr]): Expr = {
+      val preReplace = self.replaceByContext(context.filterKeys(_ != onVariable)).derivative(onVariable)
+      if (context contains onVariable) {
+        val x = context(onVariable)
+        val fx = self.replaceByContext(context.updated(onVariable, x + dx))
+        val fxMds = self.replaceByContext(context.updated(onVariable, x - dx))
+        (fx - fxMds) / dx / 2
+      } else preReplace
+    }
+
+
+    override def flatten: Expr = this
+
+    override def toString: String = s"(d($self)/d$onVariable)"
+
   }
 
   case class PartialAppliedExpression(expr: Expr, context: Map[String, Expr]) extends Expr {
@@ -111,6 +113,8 @@ object  ExpressionTree {
       operatorName = name
       this
     }
+
+    def unapply(arg: WithOperatorName): Option[String] = Some(arg.operatorName).filter(_.length > 0)
   }
 
   case class BinaryOperatorTree(lch: Expr, rch: Expr, op: (ValueType, ValueType) => ValueType) extends InstantExpr with WithOperatorName {
@@ -131,6 +135,15 @@ object  ExpressionTree {
     }
 
     override def toString: String = s"$displayName($lch, $rch)"
+
+    override def derivative(onVariable: String): Expr = this match {
+      case x if x hasSameNameAs "*" => this.lch.derivative(onVariable) * this.rch + this.lch * this.rch.derivative(onVariable)
+      case x if x hasSameNameAs "/" =>
+        (this.lch.derivative(onVariable) * this.rch - this.lch * this.rch.derivative(onVariable)) / (this.rch * this.rch)
+      case x if x hasSameNameAs "+" => this.lch.derivative(onVariable) + this.rch.derivative(onVariable)
+      case x if x hasSameNameAs "-" => this.lch.derivative(onVariable) - this.rch.derivative(onVariable)
+      case _ => this.derivativeApproximate(onVariable)
+    }
 
     override def equals(obj: scala.Any): Boolean = {
       if (super.equals(obj)) true
@@ -161,6 +174,10 @@ object  ExpressionTree {
         t.lch.getValueOption().filter(_ == 0)
           .orElse(t.rch.getValueOption().filter(_ == 0))
           .map(_ => ValueLeaf(0))
+          .orElse(
+            t.lch.getValueOption().filter(_ == 1).map(_ => t.rch)
+              .orElse(t.rch.getValueOption().filter(_ == 1).map(_ => t.lch))
+          )
           .getOrElse(t)
       }),
       "/" -> (t => {
@@ -176,6 +193,8 @@ object  ExpressionTree {
 
   case class ValueLeaf(override val value: ValueType) extends InstantExpr {
     override def toString: String = value.toString
+
+    override def derivative(onVariable: String): Expr = 0
   }
 
   case class SingleOperatorTree(node: Expr, op: ValueType => ValueType) extends InstantExpr with WithOperatorName {
@@ -245,6 +264,9 @@ object  ExpressionTree {
       if(context contains name) context(name)
       else this
 
+    override def derivative(onVariable: String): Expr =
+      if(this.name == onVariable) 1 else 0
+
     override def toString: String = name
   }
 
@@ -263,6 +285,11 @@ object  ExpressionTree {
     findFixPoint(guess)(x => x - fn(x)/dfn(x), (x, y) => Math.abs(x - y) < tolerance)
   }
 
+  def NewtonIter(fn: ValueType => ValueType, dfn: ValueType => ValueType, guess: ValueType): Option[ValueType] = {
+    val tolerance = 1e-7
+    findFixPoint(guess)(x => x - fn(x)/dfn(x), (x, y) => (x - y).abs < tolerance)
+  }
+
   implicit def handleType[T, U](t: T)(implicit f: T => U): U = f(t)
 
   case class EquationSolveTree(lhs: Expr, rhs: Expr, toSolve: String) extends Expr {
@@ -274,16 +301,18 @@ object  ExpressionTree {
         val hs = lhs - rhs
         val fr = collectFreeVariable.head
         val dhs = hs.derivative(fr)
-        def unlift(fn: ValueType => ValueType): Double => Double = (x: Double) => fn(DoubleValue.DoubleValue(x)).doubleValue
-        def toFn(e: Expr): Double => Double = unlift {
+        def toFn(e: Expr): ValueType => ValueType = {
           x => e.getValueOption(Map(fr -> x)).get
         }
 
-        NewtonIter(
+        def attempt(initial: ValueType) = NewtonIter(
           toFn(hs),
           toFn(dhs),
-          initialGuess.doubleValue
-        ).map(handleType[Double, DoubleValue.DoubleValue])
+          initial
+        )
+
+        attempt(initialGuess)
+          .orElse(attempt(initialGuess.doubleValue))
 
       }
     }

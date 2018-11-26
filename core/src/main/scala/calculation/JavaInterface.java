@@ -9,9 +9,43 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class JavaInterface {
-    public static Parsers.ParseResult<ExpressionTree.Expr> compile(String expressionInput) {
-        return ExpressionParser.parseAll(ExpressionParser.expression(), expressionInput);
+    public enum ExpressionType {
+        EXPRESSION,
+        STATEMENT,
+        CONTROLFLOW
     }
+    public static Parsers.ParseResult<ExpressionTree.Expr> compileBy(Parsers.Parser<ExpressionTree.Expr> exprParser, String expressionInput) {
+        return ExpressionParser.parseAll(exprParser, expressionInput);
+    }
+
+    public static Parsers.ParseResult<ExpressionTree.Expr> compileBy(ExpressionType type, String expressionInput) {
+        Parsers.Parser<ExpressionTree.Expr> parser = null;
+        switch (type) {
+            case EXPRESSION:
+                parser = ExpressionParser.expression();
+                break;
+            case STATEMENT:
+                parser = ExpressionParser.statement();
+                break;
+            case CONTROLFLOW:
+                parser = ExpressionParser.controlFlow();
+                break;
+        }
+        return compileBy(parser, expressionInput);
+    }
+
+    public static ExpressionAdapter forceCompileBy(ExpressionType type, String expressionInput) {
+        return compileBy(type, expressionInput).map(ExpressionAdapter::new).get();
+    }
+
+    public static ExpressionAdapter forceCompileBy(Parsers.Parser<ExpressionTree.Expr> exprParser, String expressionInput) {
+        return compileBy(exprParser, expressionInput).map(ExpressionAdapter::new).get();
+    }
+
+    public static Parsers.ParseResult<ExpressionTree.Expr> compile(String expressionInput) {
+        return compileBy(ExpressionParser.expression(), expressionInput);
+    }
+
 
     public static ExpressionTree.Expr forceCompile(String expressionInput) throws IllegalArgumentException {
         Parsers.ParseResult<ExpressionTree.Expr> result = compile(expressionInput);

@@ -1,14 +1,17 @@
 package sample
-import calculation._
+
 import protocols.ExpressionTree._
-import protocols.Rational.RationalExpr
 import protocols.ValueType
 //import moe.roselia.NaiveJSON.JSONParser._
 import calculation.ExpressionParser
+
 object Expr {
+
   import ExpressionParser._
+
   val results = scala.collection.mutable.Map.empty[String, Expr]
   var idx = 0
+
   case class ExternalContext(name: String, expr: Expr) extends Expr {
     override def collectFreeVariable: Set[String] = Set.empty
 
@@ -19,18 +22,20 @@ object Expr {
 
     override def flatten: ExternalContext = ExternalContext(name, expr.flatten)
   }
+
   case class DeleteResult(name: String) extends Expr {
     override def collectFreeVariable: Set[String] = Set.empty
   }
+
   def repl(): Unit = {
-//    println(parseAll(statement, "(4 * 2x - |3 - 9|)(x=1)").map(_.replaceByContext(Map.empty)))
-//    def add: (ValueType, ValueType) => ValueType = _ + _
-//    def mul: (ValueType, ValueType) => ValueType = _ * _
-//    def div: (ValueType, ValueType) => ValueType = _ / _
-//    println(BinaryOperatorTree(BinaryOperatorTree(3, 4, add), BinaryOperatorTree(
-//      FreeVariableLeaf("name"), FreeVariableLeaf("x"), mul
-//    ), div).collectFreeVariable)
-//    println(FreeVariableLeaf("+") == FreeVariableLeaf("+"))
+    //    println(parseAll(statement, "(4 * 2x - |3 - 9|)(x=1)").map(_.replaceByContext(Map.empty)))
+    //    def add: (ValueType, ValueType) => ValueType = _ + _
+    //    def mul: (ValueType, ValueType) => ValueType = _ * _
+    //    def div: (ValueType, ValueType) => ValueType = _ / _
+    //    println(BinaryOperatorTree(BinaryOperatorTree(3, 4, add), BinaryOperatorTree(
+    //      FreeVariableLeaf("name"), FreeVariableLeaf("x"), mul
+    //    ), div).collectFreeVariable)
+    //    println(FreeVariableLeaf("+") == FreeVariableLeaf("+"))
     println(
       """
         | _______         .__             ___________
@@ -48,11 +53,11 @@ object Expr {
     }
     val undefStatement = "undef" ~> identify ^^ DeleteResult
     val grammar = opt(":" ~> identify) ~ opt(defineStatement | undefStatement | controlFlow)
-    while(!shouldQuit) {
+    while (!shouldQuit) {
       print("NaiveExpr>")
       val jin = new java.util.Scanner(System.in)
       val expr = jin.nextLine()
-//      val command = command
+      //      val command = command
       val (rawRes, parseTime) = calculateRuntime(parseAll(grammar, expr))
       if (rawRes.successful) {
         rawRes.get match {
@@ -131,14 +136,14 @@ object Expr {
   }
 
   def processExpressionImpl(result: ExternalContext, flatten: Boolean): Unit = {
-    val res = if(flatten) result.flatten else result
-    results.put(res.name, res.expr)
+    val res = if (flatten) result.flatten else result
+    results.put(res.name, PartialAppliedExpression(res.expr, Map(res.name -> res.expr)))
     println(s"Defined ${res.name} = ${res.expr}")
 
   }
 
   def processExpressionImpl(result: DeleteResult, flatten: Boolean): Unit = {
-    if (results.contains(result.name)){
+    if (results.contains(result.name)) {
       results.remove(result.name)
       println(s"Removed defined value: ${result.name}.")
     } else {
@@ -147,7 +152,7 @@ object Expr {
   }
 
   def processExpressionImpl(result: Expr, flatten: Boolean): Unit = {
-    val res = if(flatten) result.flatten else result
+    val res = if (flatten) result.flatten else result
     val vars = res.collectFreeVariable
     //          println(rawRes.get.replaceByContext(results.toMap))
     //          println(res)
@@ -167,8 +172,8 @@ object Expr {
   }
 
   def main(args: Array[String]): Unit = {
-//    println(parseAll(derivative, "d(x)/dx"))
-    if(true || args.length == 1 && args(0) == "repl")
+    //    println(parseAll(derivative, "d(x)/dx"))
+    if (true || args.length == 1 && args(0) == "repl")
       repl()
     else Main.main(args)
   }

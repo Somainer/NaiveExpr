@@ -1,8 +1,8 @@
 name := "NaiveExpr"
 
-version := "1.2"
 
 val commonSettings = Seq(
+  version := "1.3",
   scalaVersion := "2.12.7",
   organization := "moe.roselia"
 )
