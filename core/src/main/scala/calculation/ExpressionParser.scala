@@ -45,7 +45,7 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
   def strictFactor =
     simpleMultiply | leafValue | bracket | calls | boolLeaf | (freeVariable ||| constants) | convertToInt
 
-  def factor = strictFactor // | functionCall
+  def factor = strictFactor ||| powInfix // | functionCall
 
   def bracket = "(" ~> controlFlow <~ ")"
 
@@ -58,7 +58,6 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
   def term: Parser[Expr] = derivative | functionCall | binaryOperatorReducer(factor)(Map(
     "*" -> (_ * _),
     "/" -> (_ / _),
-    "^" -> (_ ^ _),
     "&&" -> ((x, y) => if (x.toBoolean) y else x)
   ))
 
@@ -140,6 +139,8 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
   //  def div: ExpressionParser.Parser[Expr] = binaryOperatorTree(factor)("/")(_ / _)
   //
   def pow: ExpressionParser.Parser[Expr] = binaryCallTree(caseInsensitive("pow"))(_ ^ _) ^^ (_ withName "^")
+
+  def powInfix: Parser[Expr] = binaryOperatorReducer(strictFactor)(Map("^" -> (_ ^ _)))
 
   def log: ExpressionParser.Parser[Expr] = binaryCallTree(caseInsensitive("log"))(_ log _)
 

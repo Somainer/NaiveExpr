@@ -11,6 +11,7 @@ object ExpressionTree {
     def -(that: Expr): BinaryOperatorTree = BinaryOperatorTree(this, that, _ - _) withName "-"
     def *(that: Expr): BinaryOperatorTree = BinaryOperatorTree(this, that, _ * _) withName "*"
     def /(that: Expr): BinaryOperatorTree = BinaryOperatorTree(this, that, _ / _) withName "/"
+    def unary_- :SingleOperatorTree = SingleOperatorTree(this, -_) withName "-"
 
     def getValueOption(context: Map[String, ValueType]=Map.empty): Option[ValueType] = this match {
       case x: InstantExpr => Some(x.value)
@@ -35,6 +36,8 @@ object ExpressionTree {
     def derivativeApproximate(onVariable: String): Expr = {
       DerivativeExpr(this, onVariable)
     }
+
+    def toInfixString: String
   }
 
   trait InstantExpr extends Expr {
@@ -83,6 +86,8 @@ object ExpressionTree {
 
     override def toString: String = s"(d($self)/d$onVariable)"
 
+    override def toInfixString: String = s"(d(${self.toInfixString})/d$onVariable)"
+
   }
 
   case class PartialAppliedExpression(expr: Expr, context: Map[String, Expr]) extends Expr {
@@ -97,6 +102,8 @@ object ExpressionTree {
     override def replaceByContext(context: Map[String, Expr]): Expr = expr.replaceByContext(context).replaceByContext(this.context)
 
     override def toString: String = s"(${expr.toString}) where (${context.mkString(",")})"
+
+    override def toInfixString: String = s"((${expr.toInfixString}) where (${context.mkString(",")}))"
   }
 
   trait FreeExpr extends Expr {
@@ -153,6 +160,30 @@ object ExpressionTree {
         case _ => false
       }
     }
+
+    override def toInfixString: String = {
+      val lhs = lch.toInfixString
+      val rhs = rch.toInfixString
+      def getPriority(hs: Expr) = hs match {
+        case x: BinaryOperatorTree if x.operatorName.length > 0 =>
+          x.displayName match {
+            case "^" => 1
+            case "*" | "/" => 2
+            case "+" | "-" => 3
+            case _ => 4
+          }
+        case _ => 0
+      }
+      val leftPriority = getPriority(lch)
+      val rightPriority = getPriority(rch)
+      val middlePriority = getPriority(this)
+      val left = if(middlePriority < leftPriority) s"($lhs)" else lhs
+      val right =
+        if(middlePriority < rightPriority || (displayName == "/" || displayName == "-") && rightPriority > 0)
+          s"($rhs)"
+        else rhs
+      s"$left $displayName $right"
+    }
   }
 
   object BinaryOperatorTree {
@@ -195,6 +226,8 @@ object ExpressionTree {
     override def toString: String = value.toString
 
     override def derivative(onVariable: String): Expr = 0
+
+    override def toInfixString: String = toString
   }
 
   case class SingleOperatorTree(node: Expr, op: ValueType => ValueType) extends InstantExpr with WithOperatorName {
@@ -212,7 +245,23 @@ object ExpressionTree {
     override def flatten: Expr =
       flattenOption getOrElse(copy(node = node.flatten) withName displayName)
 
+    override def derivative(onVariable: String): Expr = this match {
+      case x if x hasSameNameAs "-" => -node.derivative(onVariable)
+      case x if x hasSameNameAs "sin" =>
+        SingleOperatorTree(node, _.cos).withName("cos") * node.derivative(onVariable)
+      case x if x hasSameNameAs "cos" =>
+        (-SingleOperatorTree(node, _.sin).withName("sin")) * node.derivative(onVariable)
+      case x if x hasSameNameAs "tan" =>
+        val csfx = SingleOperatorTree(node, _.cos) withName "cos"
+        node.derivative(onVariable) / (csfx * csfx)
+      case x if x hasSameNameAs "ln" =>
+        node.derivative(onVariable) / node
+      case _ => derivativeApproximate(onVariable)
+    }
+
     override def toString: String = s"$displayName($node)"
+
+    override def toInfixString: String = s"$displayName(${node.toInfixString})"
 
     override def equals(obj: scala.Any): Boolean =
       if (super.equals(obj)) true
@@ -249,6 +298,9 @@ object ExpressionTree {
       }
 
     override def toString: String = s"(if ($predicate) $consequent else $alternative)"
+
+    override def toInfixString: String =
+      s"(if (${predicate.toInfixString}) ${consequent.toInfixString} else ${alternative.toInfixString})"
   }
 
   case class FreeVariableLeaf(name: String) extends FreeExpr {
@@ -268,6 +320,8 @@ object ExpressionTree {
       if(this.name == onVariable) 1 else 0
 
     override def toString: String = name
+
+    override def toInfixString: String = toString
   }
 
   def findFixPoint[T](start: T)(f: T => T, checker: (T, T) => Boolean, maxIterTime: Int = 100000): Option[T] = {
@@ -341,6 +395,8 @@ object ExpressionTree {
     }
 
     override def toString: String = s"(find $toSolve where ($lhs = $rhs))"
+
+    override def toInfixString: String = s"(find $toSolve where (${lhs.toInfixString} = ${rhs.toInfixString}))"
   }
 
   implicit def fromValue(value: ValueType): ValueLeaf = ValueLeaf(value)

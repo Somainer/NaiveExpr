@@ -11,6 +11,9 @@ object Expr {
 
   val results = scala.collection.mutable.Map.empty[String, Expr]
   var idx = 0
+  var displayWithInfix = true
+
+  private def format(e: Expr) = if(displayWithInfix) e.toInfixString else e.toString
 
   case class ExternalContext(name: String, expr: Expr) extends Expr {
     override def collectFreeVariable: Set[String] = Set.empty
@@ -21,10 +24,14 @@ object Expr {
     override def getValueOption(context: Map[String, ValueType]): Option[ValueType] = None
 
     override def flatten: ExternalContext = ExternalContext(name, expr.flatten)
+
+    override def toInfixString: String = s"def $name = ${expr.toInfixString}"
   }
 
   case class DeleteResult(name: String) extends Expr {
     override def collectFreeVariable: Set[String] = Set.empty
+
+    override def toInfixString: String = s"undef $name"
   }
 
   def repl(): Unit = {
@@ -113,6 +120,12 @@ object Expr {
                 |(2x + 3y)(x = 1, y = 2)
                 |Number = 8
               """.stripMargin)
+            case "infix" =>
+              displayWithInfix = true
+              println("Switched to infix")
+            case "prefix" =>
+              displayWithInfix = false
+              println("Switched to prefix")
             case s => println(s"Unknown command: $s")
           }
           case None ~ None =>
@@ -138,7 +151,7 @@ object Expr {
   def processExpressionImpl(result: ExternalContext, flatten: Boolean): Unit = {
     val res = if (flatten) result.flatten else result
     results.put(res.name, PartialAppliedExpression(res.expr, Map(res.name -> res.expr)))
-    println(s"Defined ${res.name} = ${res.expr}")
+    println(s"Defined ${res.name} = ${format(res)}")
 
   }
 
@@ -164,7 +177,7 @@ object Expr {
     }
     else {
       print(s"Function/${vars.size} = ")
-      println(s"(${vars.mkString(", ")}) => $res")
+      println(s"(${vars.mkString(", ")}) => ${format(res)}")
     }
     results.put(s"res$idx", res)
     results.put("_", res)
