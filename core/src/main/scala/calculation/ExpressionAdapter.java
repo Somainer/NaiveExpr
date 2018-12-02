@@ -21,6 +21,10 @@ public final class ExpressionAdapter {
         return new ExpressionAdapter(this.expr.replaceByContext(Helpers.mapToScala(context).mapValues(v1 -> v1.expr)));
     }
 
+    public ExpressionAdapter replaceByContextExpression(Map<String, String> context) {
+        return new ExpressionAdapter(this.expr.replaceByContext(Helpers.mapToScala(context).mapValues(JavaInterface::forceCompile)));
+    }
+
     public ValueType computeExpression(Map<String, String> context) {
         return Helpers.computeExpression(this.expr, context).get();
     }
@@ -35,6 +39,10 @@ public final class ExpressionAdapter {
 
     public String getClassName() {
         return expr.getClass().getSimpleName();
+    }
+
+    public String toInfixString() {
+        return expr.toInfixString();
     }
 
     @Override

@@ -12,7 +12,9 @@ public class InvokeCalculation {
         ExpressionAdapter e = JavaInterface.forceCompileBy(JavaInterface.ExpressionType.CONTROLFLOW, "x + x - y").flatten();
         System.out.printf("Compiled Tree(%s): %s\n", e.getClassName(), e.toString());
         if (e.isFunction()) {
-            System.out.println(e);
+            HashMap<String, ExpressionAdapter> hm = new HashMap<>();
+            hm.put("y", JavaInterface.forceCompileBy(JavaInterface.ExpressionType.CONTROLFLOW, "x + x"));
+            System.out.println(e.replaceByContext(hm).flatten());
         } else {
             ValueType value = e.computeExpression(new HashMap<>());
             System.out.println(value.toString() + "(MathO)");

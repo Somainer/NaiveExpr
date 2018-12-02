@@ -53,6 +53,7 @@ object Rational {
 
     def switchOps(that: ValueType)(f: Rational => Rational)(g: Double => Double): ValueType = that match {
       case DoubleValue(x) => DoubleValue(g(x))
+      case x: BooleanValue.BooleanValue => f(x.toRationalInt)
       case x: Rational => f(x)
     }
 

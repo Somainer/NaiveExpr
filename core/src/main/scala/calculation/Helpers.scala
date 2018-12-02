@@ -1,4 +1,5 @@
 package calculation
+import protocols.ExpressionTree.Expr
 import protocols.{ExpressionTree, ValueType}
 
 import scala.collection.JavaConverters._
