@@ -55,6 +55,7 @@ object Rational {
       case DoubleValue(x) => DoubleValue(g(x))
       case x: BooleanValue.BooleanValue => f(x.toRationalInt)
       case x: Rational => f(x)
+      case x => that + x
     }
 
     override def +(that: ValueType): ValueType = switchOps(that)(this + _)(this.doubleValue + _)

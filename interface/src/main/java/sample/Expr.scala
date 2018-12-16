@@ -141,11 +141,19 @@ object Expr {
   }
 
   def processExpression(result: Expr, flatten: Boolean): Unit = {
-    result match {
-      case x: ExternalContext => processExpressionImpl(x, flatten)
-      case x: DeleteResult => processExpressionImpl(x, flatten)
-      case _ => processExpressionImpl(result, flatten)
+    try {
+      result match {
+        case x: ExternalContext => processExpressionImpl(x, flatten)
+        case x: DeleteResult => processExpressionImpl(x, flatten)
+        case _ => processExpressionImpl(result, flatten)
+      }
+    } catch {
+      case ex: Exception => println("Your input is evil: " + ex.getMessage)
+        ex.printStackTrace()
+      case err: java.lang.Error =>
+        println("Your input is an infinite loop, aborting.")
     }
+
   }
 
   def processExpressionImpl(result: ExternalContext, flatten: Boolean): Unit = {

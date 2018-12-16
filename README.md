@@ -1,5 +1,7 @@
 # NaiveExpr
 
+![NaiveJSON](https://github.com/Somainer/NaiveExpr/raw/master/naiveexpr.png)
+
 A Naive Expression Evaluator
 
 Run `sample.Expr.main` to enter REPL
@@ -40,6 +42,7 @@ and it does not behave like functions in programming languages.
 
 To apply a function, just call 
 `<function>(<argument 1>=<expression 1>, ..., <argument n>=<expression n>)`
+which will substitute arguments with expressions.
 
 `NaiveExpr` has auto currying, partly applied function will be curried to another function.
 
@@ -52,4 +55,25 @@ Or use apis
 import calculation.ExpressionParser._
 val expr = "YOUR EXPRESSION"
 parseAll(statement, expr).get // Expr
+```
+
+If you are using Java, please use Java Interface 
+
+`core.calculation.JavaInterface`
+`public static ExpressionAdapter forceCompileBy(ExpressionType type, String expressionInput)`
+
+where ExpressionType is one of:
+* EXPRESSION
+* STATEMENT
+* CONTROLFLOW
+
+You will get a ExpressionAdapter if it is a valid Expression or it will throw an Exception.
+
+Example:
+
+```Java
+ExpressionAdapter e = JavaInterface.forceCompileBy(JavaInterface.ExpressionType.CONTROLFLOW, "x + x - y").flatten();
+HashMap<String, ExpressionAdapter> hm = new HashMap<>();
+hm.put("y", JavaInterface.forceCompileBy(JavaInterface.ExpressionType.CONTROLFLOW, "x + x"));
+System.out.println(e.replaceByContext(hm).flatten()); //Should print 0
 ```
