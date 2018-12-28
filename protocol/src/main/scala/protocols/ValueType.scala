@@ -24,6 +24,9 @@ trait ValueType extends Ordered[ValueType]{
     case DoubleValue(v) => RationalExpr(v.toInt)
     case r: RationalExpr => r
   }
+  def toComplex: Complex.Complex = Complex.RectangularComplex(this, RationalExpr(0))
+
+  def sgn: Int = compare(DoubleValue(0)).signum
 
   def toBoolean: Boolean
 
@@ -38,6 +41,7 @@ trait ValueType extends Ordered[ValueType]{
     else obj match {
       case x: Double => this.doubleValue == x
       case x: Int => this == RationalExpr(x)
+      case x: Complex.Complex => x == obj
       case x: ValueType => x.doubleValue == doubleValue
       case _ => false
     }

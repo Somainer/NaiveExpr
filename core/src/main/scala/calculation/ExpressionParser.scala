@@ -2,7 +2,7 @@ package calculation
 
 import protocols.ExpressionTree._
 import protocols.Rational.RationalExpr
-import protocols.{BooleanValue, DoubleValue, Rational, ValueType}
+import protocols._
 
 import scala.util.matching.Regex
 import scala.util.parsing.combinator.{ImplicitConversions, RegexParsers}
@@ -12,7 +12,8 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
 
   def double: Parser[Double] = """([0-9]*\.)?[0-9]+([eE][-+]?[0-9]+)?""".r ^^ (_.toDouble)
 
-  def keyLiterals = Set("def", "undef", "if", "else", "true", "false", "d", "where", "and", "solve", "for")
+  def keyLiterals = Set(
+    "def", "undef", "if", "else", "true", "false", "d", "where", "and", "solve", "for", "sin", "cos", "tan", "ln", "sqrt")
 
   def bool = ("true" ^^^ true | "false" ^^^ false) ^^ (BooleanValue(_))
 
@@ -21,6 +22,8 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
   def pi = (caseInsensitive("Pi") | "π") ^^^ Math.PI
 
   def piValue = pi ^^ (DoubleValue(_))
+
+  def iLeaf: Parser[Expr] = caseInsensitive("i") ^^^ Complex.RectangularComplex(0, 1)
 
   def doubleValue: ExpressionParser.Parser[DoubleValue.DoubleValue] = double ^^ (DoubleValue(_))
 
@@ -36,11 +39,11 @@ object ExpressionParser extends RegexParsers with ImplicitConversions {
 
   def eLeaf: ExpressionParser.Parser[ValueLeaf] = caseInsensitive("e") ^^^ Math.E
 
-  def simpleMultiply = (leafValue | bracket) ~ rep1((identify ^^ FreeVariableLeaf) | bracket) ^^ {
+  def simpleMultiply = (leafValue | bracket | (freeVariable ||| constants)) ~ rep1(constants | freeVariable | bracket) ^^ {
     case num ~ expr => (num /: expr) (BinaryOperatorTree(_, _, _ * _) withName "*")
   }
 
-  def constants = piLeaf | eLeaf
+  def constants = piLeaf | eLeaf | iLeaf
 
   def strictFactor =
     simpleMultiply | leafValue | bracket | calls | boolLeaf | (freeVariable ||| constants) | convertToInt

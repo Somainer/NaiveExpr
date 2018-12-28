@@ -1,6 +1,6 @@
 # NaiveExpr
 
-![NaiveJSON](https://github.com/Somainer/NaiveExpr/raw/master/naiveexpr.png)
+![NaiveExpr](https://github.com/Somainer/NaiveExpr/raw/master/naiveexpr.png)
 
 A Naive Expression Evaluator
 
